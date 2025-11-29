@@ -158,6 +158,20 @@ async function bootstrap() {
   registerAdminReportRoutes(app, adminService);
   registerAdminProductRoutes(app, productService);
 
+  // Admin Auction Management
+  app.get('/api/v1/admin/auctions', { preHandler: [createAuthMiddleware(tokenService)] }, async (req, reply) => {
+    const query = req.query as any;
+    const result = await auctionService.listAuctions(query.status, parseInt(query.page || '1'), parseInt(query.limit || '20'));
+    reply.send({ data: result });
+  });
+
+  // Admin Lottery Management  
+  app.get('/api/v1/admin/lottery', { preHandler: [createAuthMiddleware(tokenService)] }, async (req, reply) => {
+    const query = req.query as any;
+    const result = await lotteryService.listLotteries(query.status, parseInt(query.page || '1'), parseInt(query.limit || '20'));
+    reply.send({ data: result });
+  });
+
   // Auction routes
   registerAuctionCreateRoute(app, auctionService);
   registerAuctionListRoute(app, auctionService);
