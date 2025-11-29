@@ -1,0 +1,283 @@
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// ENUM'LAR (SQLite String olarak kullanılacak)
+// UserRoleEnum: VISITOR | CUSTOMER | SELLER | ADMIN
+// ProductStatus: DRAFT | PENDING | APPROVED | PUBLISHED | ARCHIVED | REJECTED | OUT_OF_STOCK
+// AuctionStatus: SCHEDULED | RUNNING | ENDED | CANCELLED
+// LotteryStatus: SCHEDULED | ACTIVE | COMPLETED | CANCELLED
+// OrderStatus: CART | PENDING_PAYMENT | PAID | FULFILLING | SHIPPED | DELIVERED | CANCELLED | REFUNDED
+// PaymentStatus: INITIATED | AUTHORIZED | CAPTURED | REFUNDED | FAILED | CHARGEBACK
+
+// RBAC
+
+model Role {
+  id        String         @id @default(cuid())
+  code      String         @unique
+  name      String
+  createdAt DateTime       @default(now())
+
+  rolePermissions RolePermission[]
+  userRoles       UserRole[]
+}
+
+model Permission {
+  id        String         @id @default(cuid())
+  code      String         @unique
+  name      String
+  createdAt DateTime       @default(now())
+
+  rolePermissions RolePermission[]
+}
+
+model RolePermission {
+  roleId       String
+  permissionId String
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+}
+
+model User {
+  id              String       @id @default(cuid())
+  email           String       @unique
+  password        String?
+  firstName       String?
+  lastName        String?
+  phone           String?
+  avatar          String?
+  primaryRole     String       @default("CUSTOMER")
+  emailVerified   Boolean      @default(false)
+  twoFactorEnabled Boolean     @default(false)
+  twoFactorSecret String?
+  googleId        String?      @unique
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  wallet          Wallet?
+  orders          Order[]
+  auctionBids     AuctionBid[]
+  lotteryTickets  LotteryTicket[]
+  products        Product[]
+  userRoles       UserRole[]
+  notifications   Notification[]
+  payments        Payment[]
+  createdLotteries LotteryDraw[] @relation("LotteryCreator")
+}
+
+model UserRole {
+  userId String
+  roleId String
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
+}
+
+// CÜZDAN / TRANSACTION
+
+model Wallet {
+  id        String        @id @default(cuid())
+  userId    String        @unique
+  balance   Float         @default(0)
+  currency  String        @default("USD")
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions Transaction[]
+}
+
+model Transaction {
+  id          String   @id @default(cuid())
+  walletId    String
+  amount      Float
+  type        String
+  referenceId String?
+  metadata    String?
+  createdAt   DateTime @default(now())
+
+  wallet Wallet @relation(fields: [walletId], references: [id], onDelete: Cascade)
+}
+
+// E-COMMERCE: PRODUCT / ORDER
+
+model Product {
+  id          String         @id @default(cuid())
+  name        String
+  description String
+  price       Float
+  stock       Int
+  category    String
+  images      String
+  sellerId    String
+  status      String  @default("PENDING")
+  featured    Boolean        @default(false)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  seller      User           @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  auctions    Auction[]
+  orderItems  OrderItem[]
+}
+
+model Order {
+  id           String        @id @default(cuid())
+  userId       String
+  totalAmount  Float
+  status       String   @default("CART")
+  currency     String        @default("USD")
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  paymentId    String?
+  shippingInfo String?
+  billingInfo  String?
+
+  user    User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items   OrderItem[]
+  payment Payment?    @relation(fields: [paymentId], references: [id])
+}
+
+model OrderItem {
+  id        String   @id @default(cuid())
+  orderId   String
+  productId String
+  quantity  Int
+  unitPrice Float
+
+  order   Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id])
+}
+
+// AUCTION
+
+model Auction {
+  id          String        @id @default(cuid())
+  productId   String
+  startPrice  Float
+  currentBid  Float
+  buyNowPrice Float?
+  startTime   DateTime
+  endTime     DateTime
+  status      String @default("SCHEDULED")
+  winnerId    String?
+  autoExtend  Boolean       @default(true)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  product Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
+  bids    AuctionBid[]
+}
+
+model AuctionBid {
+  id         String   @id @default(cuid())
+  auctionId  String
+  userId     String
+  amount     Float
+  createdAt  DateTime @default(now())
+  isAutoBid  Boolean  @default(false)
+  maxAutoBid Float?
+
+  auction Auction @relation(fields: [auctionId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// LOTTERY
+
+model LotteryDraw {
+  id             String         @id @default(cuid())
+  title          String
+  description    String?
+  drawDate       DateTime
+  ticketPrice    Float
+  maxTickets     Int?
+  prizePool      Float
+  status         String  @default("SCHEDULED")
+  createdById    String
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  createdBy User            @relation("LotteryCreator", fields: [createdById], references: [id])
+  tickets   LotteryTicket[]
+  winners   LotteryWinner[]
+}
+
+model LotteryTicket {
+  id           String   @id @default(cuid())
+  lotteryId    String
+  userId       String
+  ticketNumber String
+  isWinner     Boolean  @default(false)
+  prizeAmount  Float?   @default(0)
+  createdAt    DateTime @default(now())
+
+  lottery LotteryDraw     @relation(fields: [lotteryId], references: [id], onDelete: Cascade)
+  user    User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  winners LotteryWinner[]
+}
+
+model LotteryWinner {
+  id          String   @id @default(cuid())
+  lotteryId   String
+  ticketId    String
+  prizeTier   Int
+  prizeAmount Float
+  createdAt   DateTime @default(now())
+
+  lottery LotteryDraw   @relation(fields: [lotteryId], references: [id], onDelete: Cascade)
+  ticket  LotteryTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+}
+
+// PAYMENT
+
+model Payment {
+  id          String        @id @default(cuid())
+  userId      String
+  amount      Float
+  currency    String        @default("USD")
+  status      String @default("INITIATED")
+  provider    String
+  providerRef String?
+  metadata    String?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  user   User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  orders Order[]
+  payout Payout?
+}
+
+model Payout {
+  id        String   @id @default(cuid())
+  paymentId String   @unique
+  sellerId  String
+  amount    Float
+  currency  String   @default("USD")
+  createdAt DateTime @default(now())
+
+  payment Payment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+}
+
+// NOTIFICATIONS
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  type      String
+  title     String
+  body      String
+  data      String?
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
