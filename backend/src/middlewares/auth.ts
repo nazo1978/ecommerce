@@ -14,7 +14,12 @@ export function createAuthMiddleware(tokenService: TokenService) {
 
     try {
       const payload = await tokenService.verifyAccessToken(token);
-      (request as any).user = payload;
+      // Map token payload to request.user format
+      (request as any).user = {
+        userId: payload.sub,
+        roles: payload.roles,
+        permissions: payload.permissions,
+      };
     } catch (error) {
       reply.code(401).send({ error: { code: 'INVALID_TOKEN', message: 'Token is invalid or expired' } });
     }
@@ -30,6 +35,16 @@ export function requirePermissions(...permissions: string[]) {
       return;
     }
 
+    if (!user.permissions || !Array.isArray(user.permissions)) {
+      reply.code(403).send({ 
+        error: { 
+          code: 'FORBIDDEN', 
+          message: 'No permissions found' 
+        } 
+      });
+      return;
+    }
+
     const hasPermission = permissions.every((perm) => user.permissions.includes(perm));
 
     if (!hasPermission) {
@@ -38,8 +53,10 @@ export function requirePermissions(...permissions: string[]) {
           code: 'FORBIDDEN',
           message: 'Insufficient permissions',
           required: permissions,
+          has: user.permissions,
         },
       });
+      return;
     }
   };
 }

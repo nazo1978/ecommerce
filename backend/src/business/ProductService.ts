@@ -13,7 +13,7 @@ export class ProductService {
       stock: input.stock,
       category: input.category,
       images: input.images,
-      status: 'PENDING',
+      status: input.status || 'PENDING', // Use input status if provided, otherwise default to PENDING
       seller: {
         connect: { id: sellerId },
       },

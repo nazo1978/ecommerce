@@ -7,6 +7,7 @@ export const ProductCreateRequest = z.object({
   stock: z.number().int().nonnegative(),
   category: z.string(),
   images: z.array(z.string().url()).max(10),
+  status: z.enum(['DRAFT', 'PENDING', 'APPROVED', 'PUBLISHED', 'REJECTED']).optional(),
 });
 
 export const ProductUpdateRequest = z.object({

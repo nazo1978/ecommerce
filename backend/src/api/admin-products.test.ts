@@ -31,16 +31,19 @@ describe('Admin Product Management', () => {
     // Register routes
     registerAuthRoutes(app, authService);
     registerLoginRoute(app, authService);
-    registerAdminProductRoutes(app, productService);
-
-    // Add auth middleware
+    
+    // Add global auth middleware for protected routes
+    app.decorateRequest('user', null);
     app.addHook('onRequest', async (request, reply) => {
+      const url = request.url.split('?')[0];
       const publicPaths = ['/api/v1/auth/register', '/api/v1/auth/login'];
-      if (publicPaths.includes(request.url)) {
+      if (publicPaths.includes(url)) {
         return;
       }
       await authMiddleware(request, reply);
     });
+    
+    registerAdminProductRoutes(app, productService);
 
     await app.ready();
     
@@ -55,7 +58,7 @@ describe('Admin Product Management', () => {
     });
 
     const data = JSON.parse(response.body);
-    adminToken = data.data.accessToken;
+    adminToken = data.data.tokens.accessToken;
   });
 
   afterAll(async () => {
@@ -427,6 +430,7 @@ describe('Admin Product Management', () => {
           stock: 5,
           category: 'Electronics',
           status: 'DRAFT',
+          images: ['https://example.com/bulk1.jpg'],
         },
         {
           name: 'Bulk Product 2',
@@ -435,6 +439,7 @@ describe('Admin Product Management', () => {
           stock: 10,
           category: 'Books',
           status: 'PUBLISHED',
+          images: ['https://example.com/bulk2.jpg'],
         },
       ];
 
